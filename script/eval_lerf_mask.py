@@ -6,9 +6,9 @@ import sys
 
 dataset_name = sys.argv[1]
 
-gt_folder_path = os.path.join('data/lerf_mask',dataset_name,'test_mask')
+gt_folder_path = os.path.join('data',dataset_name,'test_mask')
 # You can change pred_folder_path to your output
-pred_folder_path = os.path.join('result/lerf_mask',dataset_name)
+pred_folder_path = os.path.join('output',dataset_name, 'test/ours_10000_text/test_mask')
 
 # General util function to get the boundary of a binary mask.
 # https://gist.github.com/bowenc0221/71f7a02afee92646ca05efeeb14d687d
@@ -99,6 +99,7 @@ for image_name in os.listdir(gt_folder_path):
 
                 iou = calculate_iou(gt_mask, pred_mask)
                 biou = boundary_iou(gt_mask, pred_mask)
+                print(iou)
                 print("IoU: ",iou," BIoU:   ",biou)
                 if cat_id not in iou_scores:
                     iou_scores[cat_id] = []

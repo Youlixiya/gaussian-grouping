@@ -72,7 +72,7 @@ class PipelineParams(ParamGroup):
 
 class OptimizationParams(ParamGroup):
     def __init__(self, parser):
-        self.iterations = 30_000
+        self.iterations = 10_000
         self.position_lr_init = 0.00016
         self.position_lr_final = 0.0000016
         self.position_lr_delay_mult = 0.01
@@ -92,8 +92,8 @@ class OptimizationParams(ParamGroup):
         self.reg3d_interval = 2
         self.reg3d_k = 5
         self.reg3d_lambda_val = 2
-        self.reg3d_max_points = 300000
-        self.reg3d_sample_size = 1000
+        self.reg3d_max_points = 30000
+        self.reg3d_sample_size = 100
 
         super().__init__(parser, "Optimization Parameters")
 

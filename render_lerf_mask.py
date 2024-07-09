@@ -32,10 +32,12 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
     gts_path = os.path.join(model_path, name, "ours_{}_text".format(iteration), "gt")
     colormask_path = os.path.join(model_path, name, "ours_{}_text".format(iteration), "objects_feature16")
     pred_obj_path = os.path.join(model_path, name, "ours_{}_text".format(iteration), "test_mask")
+    pred_mask_map_path = os.path.join(model_path, name, "ours_{}_text".format(iteration), "test_mask_map")
     makedirs(render_path, exist_ok=True)
     makedirs(gts_path, exist_ok=True)
     makedirs(colormask_path, exist_ok=True)
     makedirs(pred_obj_path, exist_ok=True)
+    makedirs(pred_mask_map_path, exist_ok=True)
 
     # Use Grounded-SAM on the first frame
     results0 = render(views[0], gaussians, pipeline, background)
@@ -51,8 +53,9 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
     for idx, view in enumerate(tqdm(views, desc="Rendering progress")):
         pred_obj_img_path = os.path.join(pred_obj_path,str(idx))
+        pred_mask_map_img_path = os.path.join(pred_mask_map_path,str(idx))
         makedirs(pred_obj_img_path, exist_ok=True)
-
+        makedirs(pred_mask_map_img_path, exist_ok=True)
         results = render(view, gaussians, pipeline, background)
         rendering = results["render"]
         rendering_obj = results["render_object"]
@@ -62,10 +65,14 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             prob = torch.softmax(logits,dim=0)
 
             pred_obj_mask = prob[selected_obj_ids, :, :] > threshold
-            pred_obj_mask = pred_obj_mask.any(dim=0)
-            pred_obj_mask = (pred_obj_mask.squeeze().cpu().numpy() * 255).astype(np.uint8)
+            pred_obj_mask_bool = pred_obj_mask.any(dim=0)
+            pred_obj_mask = (pred_obj_mask_bool.squeeze().cpu().numpy() * 255).astype(np.uint8)
         else:
+            pred_obj_mask_bool = torch.zeros_like(view.objects, dtype=torch.bool)
             pred_obj_mask = torch.zeros_like(view.objects).cpu().numpy()
+            
+        pred_mask_map = rendering.clone()
+        pred_mask_map[:, pred_obj_mask_bool] = pred_mask_map[:, pred_obj_mask_bool] * 0.5 + torch.tensor([[1, 0, 0]], device='cuda').reshape(3, 1) * 0.5
 
         gt_objects = view.objects
         gt_rgb_mask = visualize_obj(gt_objects.cpu().numpy().astype(np.uint8))
@@ -77,6 +84,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
         gt = view.original_image[0:3, :, :]
         torchvision.utils.save_image(rendering, os.path.join(render_path, '{0:05d}'.format(idx) + ".png"))
         torchvision.utils.save_image(gt, os.path.join(gts_path, '{0:05d}'.format(idx) + ".png"))
+        torchvision.utils.save_image(pred_mask_map, os.path.join(pred_mask_map_img_path, TEXT_PROMPT + ".png"))
 
 
 
@@ -105,7 +113,7 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
         groundingdino_model = load_model_hf(ckpt_repo_id, ckpt_filenmae, ckpt_config_filename)
 
         # sam-hq
-        sam_checkpoint = 'Tracking-Anything-with-DEVA/saves/sam_vit_h_4b8939.pth'
+        sam_checkpoint = 'ckpts/sam_vit_h_4b8939.pth'
         sam = sam_model_registry["vit_h"](checkpoint=sam_checkpoint)
         sam.to(device='cuda')
         sam_predictor = SamPredictor(sam)
