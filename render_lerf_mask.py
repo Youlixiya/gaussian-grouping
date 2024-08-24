@@ -27,12 +27,16 @@ from segment_anything import sam_model_registry, SamPredictor
 from render import feature_to_rgb, visualize_obj
 
 
-def render_set(model_path, name, iteration, views, gaussians, pipeline, background, classifier, groundingdino_model, sam_predictor, TEXT_PROMPT, threshold=0.2):
-    render_path = os.path.join(model_path, name, "ours_{}_text".format(iteration), "renders")
-    gts_path = os.path.join(model_path, name, "ours_{}_text".format(iteration), "gt")
-    colormask_path = os.path.join(model_path, name, "ours_{}_text".format(iteration), "objects_feature16")
-    pred_obj_path = os.path.join(model_path, name, "ours_{}_text".format(iteration), "test_mask")
-    pred_mask_map_path = os.path.join(model_path, name, "ours_{}_text".format(iteration), "test_mask_map")
+def render_set(model_path, name, iteration, views, gaussians, pipeline, background, classifier, groundingdino_model, sam_predictor, TEXT_PROMPT, reasoning, threshold=0.2):
+    if reasoning:
+        reasoning_path = 'reasoning'
+    else:
+        reasoning_path = ''
+    render_path = os.path.join(model_path, name, "ours_{}_text".format(iteration), reasoning_path, "renders")
+    gts_path = os.path.join(model_path, name, "ours_{}_text".format(iteration), reasoning_path, "gt")
+    colormask_path = os.path.join(model_path, name, "ours_{}_text".format(iteration), reasoning_path, "objects_feature16")
+    pred_obj_path = os.path.join(model_path, name, "ours_{}_text".format(iteration), reasoning_path, "test_mask")
+    pred_mask_map_path = os.path.join(model_path, name, "ours_{}_text".format(iteration), reasoning_path,"test_mask_map")
     makedirs(render_path, exist_ok=True)
     makedirs(gts_path, exist_ok=True)
     makedirs(colormask_path, exist_ok=True)
@@ -73,7 +77,7 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
             
         pred_mask_map = rendering.clone()
         pred_mask_map[:, pred_obj_mask_bool] = pred_mask_map[:, pred_obj_mask_bool] * 0.5 + torch.tensor([[1, 0, 0]], device='cuda').reshape(3, 1) * 0.5
-
+        pred_mask_map[:, ~pred_obj_mask_bool] /= 2
         gt_objects = view.objects
         gt_rgb_mask = visualize_obj(gt_objects.cpu().numpy().astype(np.uint8))
 
@@ -88,12 +92,12 @@ def render_set(model_path, name, iteration, views, gaussians, pipeline, backgrou
 
 
 
-def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool):
+def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParams, skip_train : bool, skip_test : bool, args):
     with torch.no_grad():
         dataset.eval = True
         gaussians = GaussianModel(dataset.sh_degree)
         scene = Scene(dataset, gaussians, load_iteration=iteration, shuffle=False)
-        
+        args.reasoning
         num_classes = dataset.num_classes
         print("Num classes: ",num_classes)
 
@@ -120,11 +124,20 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
 
         # Text prompt
         if 'figurines' in dataset.model_path:
-            positive_input = "green apple;green toy chair;old camera;porcelain hand;red apple;red toy chair;rubber duck with red hat"
+            if args.reasoning:
+                positive_input = "what is green fruit;what is suitable for people to sit down and is green;what can be used to take pictures and is black;what is like a part of a person;what is red fruit;what is suitable for people to sit down and is red;which is the small yellow rubber duck"
+            else:
+                positive_input = "green apple;green toy chair;old camera;porcelain hand;red apple;red toy chair;rubber duck with red hat"
         elif 'ramen' in dataset.model_path:
-            positive_input = "chopsticks;egg;glass of water;pork belly;wavy noodles in bowl;yellow bowl"
+            if args.reasoning:
+                positive_input = "which one is the chopstic on the side of yellow bowl;what is the round, golden, protein-rich object in the bowl;which one is a transparent cup with water in it;which is the big piece of meat in the bowl;which are long and thin noodles;which is the yellow bowl used to hold noodles"
+            else:
+                positive_input = "chopsticks;egg;glass of water;pork belly;wavy noodles in bowl;yellow bowl"
         elif 'teatime' in dataset.model_path:
-            positive_input = "apple;bag of cookies;coffee mug;cookies on a plate;paper napkin;plate;sheep;spoon handle;stuffed bear;tea in a glass"
+            if args.reasoning:
+                positive_input = "which is red fruit;which is the brown bag on the side of the plate;which cup is used for coffee;which are the cookies;what can be used to wipe hands;what can be used to hold cookies;which is a cute white doll;which is spoon handle;which is the brown bear doll;which is the drink in the transparent glass"
+            else:
+                positive_input = "apple;bag of cookies;coffee mug;cookies on a plate;paper napkin;plate;sheep;spoon handle;stuffed bear;tea in a glass"
         else:
             raise NotImplementedError   # You can provide your text prompt here
         
@@ -133,9 +146,9 @@ def render_sets(dataset : ModelParams, iteration : int, pipeline : PipelineParam
 
         for TEXT_PROMPT in positives:
             if not skip_train:
-                render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background, classifier, groundingdino_model, sam_predictor, TEXT_PROMPT)
+                render_set(dataset.model_path, "train", scene.loaded_iter, scene.getTrainCameras(), gaussians, pipeline, background, classifier, groundingdino_model, sam_predictor, TEXT_PROMPT, args.reasoning)
             if not skip_test:
-                render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background, classifier, groundingdino_model, sam_predictor, TEXT_PROMPT)
+                render_set(dataset.model_path, "test", scene.loaded_iter, scene.getTestCameras(), gaussians, pipeline, background, classifier, groundingdino_model, sam_predictor, TEXT_PROMPT, args.reasoning)
 
 
              
@@ -149,10 +162,11 @@ if __name__ == "__main__":
     parser.add_argument("--skip_train", action="store_true")
     parser.add_argument("--skip_test", action="store_true")
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument("--reasoning", action="store_true")
     args = get_combined_args(parser)
     print("Rendering " + args.model_path)
 
     # Initialize system state (RNG)
     safe_state(args.quiet)
 
-    render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test)
+    render_sets(model.extract(args), args.iteration, pipeline.extract(args), args.skip_train, args.skip_test, args)

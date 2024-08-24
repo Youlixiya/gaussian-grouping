@@ -6,9 +6,10 @@ import sys
 
 dataset_name = sys.argv[1]
 
-gt_folder_path = os.path.join('data',dataset_name,'test_mask')
+gt_folder_path = os.path.join('data','gsgrouping', dataset_name,'test_mask')
 # You can change pred_folder_path to your output
-pred_folder_path = os.path.join('output',dataset_name, 'test/ours_10000_text/test_mask')
+pred_folder_path = os.path.join('output','gsgrouping', dataset_name, 'test/ours_10000_text/reasoning/test_mask')
+
 
 # General util function to get the boundary of a binary mask.
 # https://gist.github.com/bowenc0221/71f7a02afee92646ca05efeeb14d687d
@@ -75,6 +76,16 @@ def calculate_iou(mask1, mask2):
 iou_scores = {}  # Store IoU scores for each class
 biou_scores = {}
 class_counts = {}  # Count the number of times each class appears
+# prompt_dict
+
+prompt_dict_teatime ={"apple":"which is red fruit","bag of cookies":"which is the brown bag on the side of the plate","coffee mug":"which cup is used for coffee","cookies on a plate":"which are the cookies","paper napkin":"what can be used to wipe hands","plate":"what can be used to hold cookies","sheep":"which is a cute white doll","spoon handle":"which is spoon handle","stuffed bear":"which is the brown bear doll","tea in a glass":"which is the drink in the transparent glass"}
+
+                             
+# prompt_dict_figurines:"green apple":"what is green fruit","green toy chair":"what is suitable for people to sit down and is green","old camera":"what can be used to take pictures and is black","porcelain hand":"what is like a part of a person","red apple":"what is red fruit","red toy chair":"what is suitable for people to sit down and is red","rubber duck with red hat":"which is the small yellow rubber duck"
+# prompt_dict_ramen:"chopsticks":"which one is the chopstic on the side of yellow bowl","egg":"what is the round, golden, protein-rich object in the bowl","glass of water":"which one is a transparent cup with water in it", "pork belly":"which is the big piece of meat in the bowl", "wavy noodles in bowl":"which are long and thin noodles","yellow bowl":"which is the yellow bowl used to hold noodles"
+
+
+
 
 # Iterate over each image and category in the GT dataset
 for image_name in os.listdir(gt_folder_path):
@@ -85,7 +96,8 @@ for image_name in os.listdir(gt_folder_path):
         for cat_file in os.listdir(gt_image_path):
             cat_id = cat_file.split('.')[0]  # Assuming cat_file format is "cat_id.png"
             gt_mask_path = os.path.join(gt_image_path, cat_file)
-            pred_mask_path = os.path.join(pred_image_path, cat_file)
+            pred_mask_path = os.path.join(pred_image_path, prompt_dict_teatime[cat_id]+'.png')
+            
 
             gt_mask = load_mask(gt_mask_path)
             pred_mask = load_mask(pred_mask_path)
